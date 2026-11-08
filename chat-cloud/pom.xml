@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<!-- 继承 Spring Boot 官方父 POM，统一管理 Boot 相关依赖版本与插件配置 -->
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.1</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+
+	<groupId>org.example</groupId>
+	<artifactId>chat-cloud</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<!-- 聚合父工程只负责版本管理与模块聚合，本身不产出可执行 jar -->
+	<packaging>pom</packaging>
+	<name>chat-cloud</name>
+	<description>chat 微服务聚合父工程</description>
+
+	<properties>
+		<java.version>17</java.version>
+		<!-- Spring Cloud 版本由 release train 统一决定，2025.1.x (Oakwood) 对应 Spring Boot 4.0.x / 4.1.x -->
+		<spring-cloud.version>2025.1.3</spring-cloud.version>
+		<!-- Spring Cloud Alibaba：2025.1.x 版本线对应 Spring Cloud 2025.1（内含 nacos-client 3.1.1） -->
+		<spring-cloud-alibaba.version>2025.1.0.0</spring-cloud-alibaba.version>
+		<!-- MyBatis-Plus：Boot 4 用专门的 spring-boot4-starter -->
+		<mybatis-plus.version>3.5.17</mybatis-plus.version>
+	</properties>
+
+	<!--
+		所有子服务都在这里注册，Maven 按顺序构建。
+		注意：没有 chat-registry —— Nacos 是【独立部署的服务端】，不像 Eureka 需要自己写一个注册中心模块。
+	-->
+	<modules>
+		<module>chat-common</module>
+		<module>chat-gateway</module>
+		<module>chat-auth</module>
+		<module>chat-user</module>
+		<module>chat-relation</module>
+		<module>chat-message</module>
+		<module>chat-connection</module>
+	</modules>
+
+	<!-- 只做版本管理，不做实际依赖引入；子模块写 groupId/artifactId 即可，不用写版本号 -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<!-- Spring Cloud Alibaba 的 BOM，管理 nacos-discovery / sentinel 等组件版本 -->
+			<dependency>
+				<groupId>com.alibaba.cloud</groupId>
+				<artifactId>spring-cloud-alibaba-dependencies</artifactId>
+				<version>${spring-cloud-alibaba.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<!-- MyBatis-Plus（Boot 4 专用 starter），版本在 properties 里统一管 -->
+			<dependency>
+				<groupId>com.baomidou</groupId>
+				<artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+				<version>${mybatis-plus.version}</version>
+			</dependency>
+
+			<!-- 本工程内部模块互相引用的版本 -->
+			<dependency>
+				<groupId>org.example</groupId>
+				<artifactId>chat-common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<!--
+		Lombok 放在这里（dependencies，而不是 dependencyManagement），
+		让所有子模块都能直接用 @Data / @Builder 等注解，不用每个模块各写一遍。
+		它是「编译期工具」：加 optional=true 后不会被传递依赖出去，也不影响运行期。
+	-->
+	<dependencies>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<!--
+				重要：JDK 21+ 默认不再自动发现 classpath 上的注解处理器（JDK 23 起彻底关闭），
+				结果是 Lombok 的 @Data 完全不生效、getter/setter 一个都不生成。
+				必须像下面这样显式声明 annotationProcessorPaths，Lombok 才会真正工作。
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+		</plugins>
+
+		<pluginManagement>
+			<plugins>
+				<!-- 放在 pluginManagement 里：只有声明了该插件的子模块才会被打成可执行 jar -->
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+
+</project>

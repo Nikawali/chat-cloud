@@ -1,0 +1,54 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: 8081
+
+spring:
+  application:
+    name: chat-auth
+  cloud:
+    # ---- Nacos 服务发现 ----
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+      config:
+        enabled: false
+
+    # ---- Feign：调用 chat-user 落库 ----
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+  # Redis：存短信验证码、nonce（防重放）、登录 token
+  # 注意 Boot 3+ 的前缀是 spring.data.redis（不是旧版的 spring.redis）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3s
+
+# ============================================================
+# 开发便利开关
+# ============================================================
+chat:
+  sms:
+    # 是否把短信验证码【直接返回给前端】，省得去翻 chat-auth 的控制台日志。
+    #
+    # ⚠️⚠️⚠️ 上线前必须改成 false！⚠️⚠️⚠️
+    # 打开后任何人调 /auth/sms-code 都能拿到验证码，
+    # 等于可以给【任意手机号】注册，短信验证形同虚设。
+    #
+    # 部署时可以用环境变量 SMS_EXPOSE_CODE=false 覆盖，不用改代码
+    expose-code: ${SMS_EXPOSE_CODE:true}
+
+  # ---- 用户资料缓存（登录成功后写入 Redis，key = user:info:{userId}）----
+  #
+  # 缓存有效期【不在这里配】，而是 chat-common 的常量 CacheKeys.USER_INFO_TTL（现在 2 小时）。
+  # 原因：chat-auth 写的时候设它，chat-user 读命中后要把它重置回同一个值 ——
+  # 两个服务必须同意这个数字，配两份迟早会对不上。
+  # 要改的话去改那个常量（两边自动生效）。

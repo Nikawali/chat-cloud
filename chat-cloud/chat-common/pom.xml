@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.example</groupId>
+		<artifactId>chat-cloud</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>chat-common</artifactId>
+	<name>chat-common</name>
+	<description>各微服务共享的 DTO / 统一返回体 / 常量</description>
+
+	<!--
+		注意：这是普通 jar 模块，绝对不能引入 spring-boot-maven-plugin 的 repackage，
+		否则会被打成可执行 jar，其他服务就无法作为依赖引用它了。
+	-->
+	<dependencies>
+		<!-- 共享连接路由工具；不引入 Servlet 或 Spring MVC。 -->
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-redis</artifactId>
+			<!-- 仅供路由工具编译；实际使用者自行引入 Redis starter，避免污染其他服务的自动配置。 -->
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-commons</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+</project>

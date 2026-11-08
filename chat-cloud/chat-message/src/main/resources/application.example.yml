@@ -1,0 +1,158 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: ${CHAT_MESSAGE_PORT:8083}
+
+spring:
+  rabbitmq:
+    host: ${CHAT_RABBIT_HOST:127.0.0.1}
+    port: ${CHAT_RABBIT_PORT:5672}
+    username: ${CHAT_RABBIT_USER:guest}
+    password: ${CHAT_RABBIT_PASSWORD}
+    virtual-host: ${CHAT_RABBIT_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        concurrency: 2
+        max-concurrency: 4
+        prefetch: 10
+        retry:
+          enabled: true
+          initial-interval: 2s
+          multiplier: 2
+          max-interval: 10s
+  application:
+    name: chat-message
+  cloud:
+    # ---- Nacos 服务发现（和别的服务同一套写法）----
+    nacos:
+      discovery:
+        # 跨服务器部署时改成 Nacos 的真实内网地址，如 192.168.1.10:8848
+        server-addr: localhost:8848
+      config:
+        enabled: false
+
+    openfeign:
+      # 每个实例共享池；per-route 是每个目标地址的连接上限。
+      httpclient:
+        max-connections: 200
+        max-connections-per-route: 100
+        time-to-live: 900
+        time-to-live-unit: seconds
+        hc5:
+          enabled: true
+          connection-request-timeout: 1
+          connection-request-timeout-unit: seconds
+      client:
+        config:
+          # default 表示对所有 Feign 客户端生效
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+  # ---- 文件上传（聊天附件：图片 / 文件）----
+  # Spring 的 multipart 限额是【请求级】的硬闸：超过它请求根本进不到 controller，
+  # 抛 MaxUploadSizeExceededException（GlobalExceptionHandler 把它翻译成 413 + 一句人话）。
+  # 再大一点给 max-request-size：multipart 除了文件本体还有分隔符和头，正好等于上限会误伤。
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+  # ---- MySQL 数据源 ----
+  # 用【项目专属】的变量名 CHAT_MYSQL_*，别用太通用的 MYSQL_USER / MYSQL_PASSWORD
+  # （撞上机器上别的项目留下的环境变量，就会出现"配置改了却不生效"的诡异现象）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${CHAT_MYSQL_USER:root}
+    # ⚠️ 生产环境不要把真实密码写在配置文件里，应该放环境变量或配置中心
+    password: ${CHAT_MYSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 2
+
+  # ---- Redis：待送达队列（重试调度）+ 以后的在线注册表 ----
+  # ⚠️ Redis 里的东西都是"可以丢的"：消息本身只以 MySQL 为准，
+  #    实时推送失败靠"上线补拉"兜底，所以两个存储不需要强一致。
+  data:
+    redis:
+      host: ${CHAT_REDIS_HOST:localhost}
+      port: ${CHAT_REDIS_PORT:6379}
+      database: 0
+      timeout: 3s
+      # Per instance; keep pipeline connections available for reuse after each batch.
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 16
+          min-idle: 2
+          max-wait: 1s
+          time-between-eviction-runs: 30s
+
+# ---- 消息相关配置 ----
+chat:
+  group:
+    mq-enabled: ${CHAT_GROUP_MQ_ENABLED:true}
+    retry-scan-ms: 1000
+    retry-max-attempts: 8
+  internal:
+    # 与 chat-connection 一致；生产必须覆盖本地开发值。
+    token: ${CHAT_INTERNAL_TOKEN}
+  message:
+    # 单次拉历史/补拉最多返回多少条（防止一次把整个会话拉出来）。
+    # 内容长度上限【不在这里配】：它在 SendMessageRequest 的 @Size 上 ——
+    # 那是接口契约的一部分，写两份迟早对不上。
+    max-page-size: 100
+
+    # ---- 送达重试 ----
+    # 简单说：因为收不到 ack 而一直推，最多推这么久（秒）。
+    # ⚠️ 这只是"放弃【实时推送】"，不是"放弃送达" ——
+    #    消息和收据都还在库里（delivered_at 为空），对方下次上线时"补拉"接口会把它捞回去。
+    retry-window-seconds: 180
+    # 定时任务每次最多处理多少条待送达（防止一轮扫太多把 CPU 占满）
+    retry-batch-size: 200
+    # 多实例处理租约；worker 崩溃后可重新领取。旧令牌不能修改新任务。
+    retry-lease-ms: ${CHAT_MESSAGE_RETRY_LEASE_MS:30000}
+    # 指数退避的基准与上限：第 1 次 1s、第 2 次 2s、第 3 次 4s……30s 封顶
+    retry-base-delay-ms: 1000
+    retry-max-delay-ms: 30000
+    # 定时扫描间隔（毫秒）：1 秒扫一次"到期的待送达"
+    retry-scan-interval-ms: 1000
+
+
+  # ---- 文件上传（聊天附件）----
+  #
+  # ⚠️ 这一块必须并进上面这个 chat: 里，不能再写一个顶层 chat: ——
+  #    YAML 里重复的顶层键是【后者覆盖前者】，那样 message 那整块的配置会被悄悄丢掉。
+  upload:
+    # 上传根目录。相对路径是相对【服务的启动目录】：
+    # 也就是说 IDE 里跑 和 打包后跑，落盘位置不一样。
+    # 生产环境一定要落成绝对路径（或挂一块数据盘），否则重新部署会把用户文件弄丢。
+    # 注意它和 chat-user 的 chat.upload.dir 是同一个属性名 —— 两个服务都用它，
+    # 但各自只读写自己的子目录（attachments/ 与 avatars/），互不干扰。
+    dir: ${CHAT_UPLOAD_DIR:data/uploads}
+    # 单个附件的业务上限：50MB（和 spring.servlet.multipart.max-file-size 对齐）。
+    # 这一层负责给出一句人话的错误消息、以及挡住 0 字节文件。
+    max-attachment-bytes: 52428800
+    # 附件目前【永久保留】（不做定时清理）。
+    # 以前这里有一组 attachment-retention-days / attachment-sweep-interval-ms 配的
+    # AttachmentRetentionJob（30 天回收），现在按需求先去掉 —— 清理策略以后再说。
+    # 客户端那边本来也会在 messages/u<我>/media/ 存一份，和这里的保留期无关。
+
+# ---- MyBatis-Plus ----
+mybatis-plus:
+  configuration:
+    # 数据库的下划线字段自动映射成 Java 驼峰属性：from_user_id -> fromUserId
+    map-underscore-to-camel-case: true
+    # 把执行的 SQL 打印到控制台，学习阶段非常有用，生产环境记得关掉
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      # 主键策略：数据库自增
+      id-type: auto

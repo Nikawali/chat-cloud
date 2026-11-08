@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.example</groupId>
+		<artifactId>chat-cloud</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>chat-gateway</artifactId>
+	<name>chat-gateway</name>
+	<description>API 网关（Spring Cloud Gateway WebFlux），端口 8080</description>
+
+	<dependencies>
+		<!--
+			注意：Spring Cloud Gateway 5.x 的 WebFlux 版 starter 叫
+			spring-cloud-starter-gateway-server-webflux（旧名 spring-cloud-starter-gateway 已废弃）。
+			网关是响应式的，绝对不能引入 spring-boot-starter-web，否则会和 WebFlux 冲突启动失败。
+		-->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.alibaba.cloud</groupId>
+			<artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+		</dependency>
+		<!-- lb:// 协议需要负载均衡器 -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+		</dependency>
+
+		<!--
+			鉴权要查 Redis（auth:token:{token} -> userId）。
+			必须是【响应式】版本：Gateway 跑在 WebFlux 上，事件循环线程数量有限，
+			一旦在过滤器里做阻塞式 Redis 调用，线程会被卡住，整个网关吞吐直接崩。
+			普通的 spring-boot-starter-data-redis 基于 Lettuce 的同步 API，不能用。
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+		</dependency>
+
+		<!--
+			只为了拿 Result 的字段名约定等常量（AuthHeaders / ServiceNames）。
+			chat-common 故意不依赖 spring-boot-starter-web，所以它是"干净"的，
+			不会把 Servlet 那套拖进来和 WebFlux 冲突。
+		-->
+		<dependency>
+			<groupId>org.example</groupId>
+			<artifactId>chat-common</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

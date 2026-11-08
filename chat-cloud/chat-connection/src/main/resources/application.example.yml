@@ -1,0 +1,62 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: ${CHAT_CONNECTION_PORT:8085}
+
+spring:
+  application:
+    name: chat-connection
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${CHAT_NACOS_SERVER_ADDR:localhost:8848}
+        enabled: ${CHAT_CONNECTION_DISCOVERY_ENABLED:true}
+        metadata:
+          connection-instance-id: ${chat.connection.instance-id}
+      config:
+        enabled: false
+
+    openfeign:
+      # 每个实例共享池；per-route 是每个目标地址的连接上限。
+      httpclient:
+        max-connections: 200
+        max-connections-per-route: 100
+        time-to-live: 900
+        time-to-live-unit: seconds
+        hc5:
+          enabled: true
+          connection-request-timeout: 1
+          connection-request-timeout-unit: seconds
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+  data:
+    redis:
+      host: ${CHAT_REDIS_HOST:localhost}
+      port: ${CHAT_REDIS_PORT:6379}
+      timeout: 3s
+      # Per instance; ordinary commands still use Lettuce's default shared connection.
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 16
+          min-idle: 2
+          max-wait: 1s
+          time-between-eviction-runs: 30s
+
+chat:
+  internal:
+    # 两个服务必须一致。默认值仅供本地开发，生产通过环境变量覆盖。
+    token: ${CHAT_INTERNAL_TOKEN}
+  connection:
+    # 每个实例必须唯一；默认以机器地址和监听端口区分。
+    instance-id: ${CHAT_CONNECTION_INSTANCE_ID:${spring.cloud.client.ip-address:127.0.0.1}:${server.port}}
+    route-ttl-seconds: 120
+    ws-idle-timeout-seconds: 90
+    ws-idle-scan-interval-ms: 30000
+    ws-sweep-batch-size: 500

@@ -1,0 +1,158 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: 8080
+
+spring:
+  application:
+    name: chat-gateway
+  cloud:
+    # ---- Nacos 服务发现（取代了原来的 Eureka）----
+    nacos:
+      discovery:
+        # Nacos 服务端地址。跨服务器部署时改成 Nacos 的真实内网地址，如 192.168.1.10:8848
+        server-addr: localhost:8848
+        # 关掉 Nacos 配置中心（我们现在只用它做服务发现，避免它去拉不存在的配置）
+        config:
+          enabled: false
+
+    gateway:
+      # Spring Cloud Gateway 5.x 的配置前缀：spring.cloud.gateway.server.webflux.*
+      # 旧写法 spring.cloud.gateway.routes 已经废弃，不要再用了
+      server:
+        webflux:
+          routes:
+            # 统一约定：外部访问 /api/xxx/**，StripPrefix=1 去掉 /api 后转发给服务
+            # uri 里的 lb:// 靠 Nacos 把服务名解析成真实 ip:port
+            - id: chat-auth
+              uri: lb://chat-auth
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - StripPrefix=1
+
+            - id: chat-user
+              uri: lb://chat-user
+              predicates:
+                - Path=/api/user/**
+              filters:
+                - StripPrefix=1
+
+            - id: chat-relation
+              uri: lb://chat-relation
+              predicates:
+                - Path=/api/relation/**
+              filters:
+                - StripPrefix=1
+
+            - id: chat-message
+              uri: lb://chat-message
+              predicates:
+                - Path=/api/message/**
+              filters:
+                - StripPrefix=1
+
+            # ---- 单聊的实时推送：WebSocket ----
+            #
+            # ⚠️ 必须【单独一条】路由，而且 order 要比上面那条 /api/message/** 更小。
+            #    原因：Gateway 是按 order 排序后取【第一个匹配】的路由，
+            #    而 ws 和 http 是两种不同的 routing filter（由 uri 的 scheme 决定，
+            #    ws 交给 WebsocketRoutingFilter，http 交给 NettyRoutingFilter）。
+            #    不写 order 的话两条都是默认 0，谁赢取决于声明顺序 —— 那种"看起来能跑"的
+            #    配置最容易在别人调整顺序时突然坏掉，所以这里显式写 -1。
+            #
+            #    实测补充：Gateway 5.x 对 uri 是 lb://（http）的普通路由【也会】处理 WebSocket 升级
+            #    本项目必须保留专用 WS 路由，才能转发到 chat-connection；
+            #    普通 /api/message/** 仍转发到 chat-message。
+            #
+            # uri 用 lb:ws://（不是 lb://）：lb 前缀仍然让 Nacos + LoadBalancer 解析实例，
+            # ws 告诉 Gateway 这条要用 WebSocket 的方式转发。
+            #
+            # 鉴权照旧走 AuthGlobalFilter（握手就是一次 HTTP GET，会经过它）：
+            # 它验 token、剥掉客户端伪造的 X-User-*、注入真正的 X-User-Id，
+            # chat-connection 的握手拦截器只读这个头，读不到就拒绝连接。
+            - id: chat-message-ws
+              order: -1
+              uri: lb:ws://chat-connection
+              predicates:
+                - Path=/api/message/ws
+              filters:
+                - StripPrefix=1
+
+          # 浏览器跨域，前端联调时用得上
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origin-patterns: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+                allow-credentials: true
+
+  # Redis：网关用 auth:token:{token} -> userId 做鉴权
+  # 注意 Boot 3+ 的前缀是 spring.data.redis（不是旧版的 spring.redis）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3s
+
+# ============================================================
+# 网关鉴权配置
+# ============================================================
+chat:
+  security:
+    # token 前缀【故意不在这里配】。
+    # 它的默认值来自 chat-common 的 CacheKeys.AUTH_TOKEN_PREFIX ——
+    # 这个字符串 chat-auth 写、网关读，以前被写在 3 个地方，
+    # 任何一处改错就是"登录成功但所有接口都 401"，而且不报任何错。
+    # 真的要临时覆盖（比如灰度期间读旧前缀），才把下面这行打开：
+    # token-key-prefix: "auth:token:"
+
+    # 免登录的白名单（Ant 风格通配）。这里写的是【网关看到的路径】，
+    # 也就是带 /api 前缀的完整路径（StripPrefix 是在路由阶段才生效的）。
+    #
+    # 判断标准：这个接口在调用时"用户还没证明自己是谁"，就必须放行。
+    # 其余任何 /api/** 接口都默认要登录 —— 白名单是例外，默认拒绝才是安全的方向。
+    whitelist:
+      - /api/auth/register      # 注册（还没账号）
+      - /api/auth/login         # 登录（就是要拿 token）
+      - /api/auth/sms-code      # 发验证码（注册流程的一部分）
+      - /api/auth/public-key    # 取 RSA 公钥（加密密码前必须拿）
+      # 注意：/api/auth/logout（登出）【不在】白名单 —— 当然要带着有效 token 才能登出
+
+      # 头像图片的读取。
+      #
+      # ⚠️ 放行它是因为【<img src> 带不上我们的 token】：token 放在 Authorization 头里，
+      #    由前端 fetch 手动加上；而浏览器自己发起的图片请求不会带自定义头。
+      #    不放行的话，头像会全部显示成裂图。
+      #
+      # 安全上可以接受的理由：
+      #   ① 图片本身不是敏感数据（它本来就要展示给好友看）；
+      #   ② 文件名是服务端生成的 32 位随机十六进制，不可枚举 —— 想拿到别人的头像
+      #      得先知道那个随机名，而它只在对方/自己的资料接口里返回；
+      #   ③ 这个路径下只有图片，且类型在入库前就按文件头卡死了（没有可执行内容）。
+      # 要更严的做法是"鉴权读图 + 前端取 blob"，代价是每个头像都要走一次带 token 的
+      # 请求并自己管 objectURL —— 对这个项目不值得，这里明确记下取舍。
+      - /api/user/uploads/**
+
+      # 聊天附件（图片 / 文件）的读取。
+      #
+      # ⚠️ 和上面头像同理：<img src> 带不上 Authorization 头，不放行就全是裂图。
+      # 安全上可以接受的理由也一样：
+      #   ① 这些文件本来就是要给对方看的；
+      #   ② 文件名是服务端生成的 32 位随机十六进制，不可枚举；
+      #   ③ 这个路径下只有我们白名单里的类型 —— html / svg / js / xml 这类
+      #      "在本域名下能执行"的东西在落盘前就被拒了（见 chat-message 的 AttachmentStorageService）。
+      # ⚠️ 只放行 GET 语义的读路径；上传（POST /api/message/upload）不在白名单里，
+      #    必须带 token —— 否则任何人都能往我们磁盘上写东西。
+      - /api/message/uploads/**
+
+    # 【限流以后再做】
+    # 这里原来配了 chat.security.rate-limit（给 /api/user/search 按用户限流），
+    # 现在把过滤器和配置都撤掉了。以后要做的时候：
+    #   ① 恢复 RateLimitGlobalFilter（顺序 -90，必须在鉴权之后才拿得到 X-User-Id）
+    #   ② 用 Lua 保证"计数 + 首次设过期"是原子的（否则会留下永不过期的计数器）
+    #   ③ 优先加在 /api/user/search 上 —— 它等于"手机号枚举器"，
+    #      不限流的话，拿一个正常账号 + 一份手机号列表就能摸出
+    #      "谁在本平台注册过、叫什么"，比破解密码容易得多。

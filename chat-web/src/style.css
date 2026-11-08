@@ -1,0 +1,335 @@
+/*
+  ══════════════════════════════════════════════════════════════════════
+   全局样式 + 设计变量（方向 A：克制专业 / Linear·Notion 那一派）
+  ══════════════════════════════════════════════════════════════════════
+
+  这一版不是"把颜色换成变量"，而是换了一套视觉语言。三条最关键的差别：
+
+    ① **不用阴影分层，用发丝线。** 卡片一律 1px 边框 + 圆角，没有投影。
+       投影是"管理后台"和"AI 生成感"最重的来源；Linear / Notion 全都不投影。
+       （只有真正的浮层 —— 对话框、下拉菜单 —— 才给阴影，因为它确实浮在内容之上。）
+
+    ② **头像用圆角方形（8px），不用正圆。** 这是"现代工具"和"聊天玩具"的分界线。
+       一行 CSS 就能全站生效：.el-avatar { border-radius: var(--chat-radius-avatar) }。
+
+    ③ **字号整体小半档、字重只用 400/500/600。** 之前 15px/700 到处飞是"廉价感"的
+       另一个来源。A 的档位：11.5 / 12.5 / 13.5 / 15 / 20，字重 400（正文）/
+       500（名字、按钮）/ 600（标题）。
+
+  颜色全部显式写值（不再转发 Element Plus 变量）：因为 A 的调色板（靛蓝 #5b5bd6、
+  近白底 #fafafa、发丝线 #ececf0）和 EP 默认的蓝/灰不是一套。
+  但 EP 组件（按钮、输入框、tag、焦点环）的颜色来自它自己的变量，
+  所以下面【同时覆盖了 --el-color-primary 及其全部派生色】——
+  少覆盖一个，就会出现"按钮是靛蓝、hover 一下变回蓝色"这种脏效果。
+*/
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  background: var(--chat-page-bg);
+  color: var(--chat-text);
+  /* 中文在 Electron 里默认发糊，这两个开关让细笔画清楚很多 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+/* ══════════════════ 设计变量 ══════════════════ */
+:root {
+  /* ---- Element Plus 主色族：靛蓝 #5b5bd6 ----
+     派生色不是拍脑袋写的，是按 EP 自己的公式算的：
+       light-N = 主色往白混 N/10；dark-2 = 主色往黑混 20%。
+     （用同一个公式回算 EP 自己的蓝能复现官方值 #79bbff，所以这组可信。） */
+  --el-color-primary: #5b5bd6;
+  --el-color-primary-light-3: #8c8ce2;
+  --el-color-primary-light-5: #adadea;
+  --el-color-primary-light-7: #cecef3;
+  --el-color-primary-light-8: #dedef7;
+  --el-color-primary-light-9: #efeffb;
+  --el-color-primary-dark-2: #4949ab;
+
+  /* EP 的圆角默认 4px，偏"后台"；A 用 8px */
+  --el-border-radius-base: 8px;
+
+  /* ---- 应用自己的颜色 ---- */
+  --chat-page-bg: #fafafa;      /* 页面底：近白，不是灰 */
+  --chat-surface: #ffffff;      /* 卡片/面板 */
+  --chat-surface-2: #f4f4f5;    /* 次级表面：输入框、悬停底、分段控件槽 */
+  --chat-border: #ececf0;       /* 发丝线（唯一的分层手段） */
+  --chat-border-strong: #dedee3;/* 需要更明确的分界时才用 */
+  --chat-text: #16181d;         /* 正文 */
+  --chat-text-2: #5b616e;       /* 次要正文 */
+  --chat-text-3: #8b909c;       /* 时间、说明 */
+  --chat-brand: #5b5bd6;
+  --chat-brand-fg: #ffffff;     /* 主色底上的文字色 */
+  --chat-danger: #e5484d;
+
+  /* ---- 形状 ---- */
+  --chat-radius: 10px;          /* 卡片 */
+  --chat-radius-sm: 8px;        /* 按钮、输入框 */
+  --chat-radius-bubble: 14px;   /* 消息气泡 */
+  --chat-radius-tail: 4px;      /* 气泡"尾巴"那一侧的小圆角 */
+  --chat-radius-avatar: 8px;    /* 圆角方形头像（不是正圆） */
+  /* 卡片不投影：分层交给发丝线。只给真正的浮层留一档阴影 */
+  --chat-shadow-1: none;
+  --chat-shadow-2: 0 10px 30px rgba(16, 18, 29, 0.12);
+
+  /* ---- 密度与字号（A 的档位：11.5 / 12.5 / 13.5 / 15 / 20）---- */
+  --chat-page-pad: 14px;
+  /*
+    横向内边距随窗口缩放：窄窗口 14px（不浪费本来就不多的宽度），
+    宽窗口最多 24px（否则内容会一直贴到窗口边上）。
+    clamp(最小, 随窗口变化, 最大) 就是"自适应缩放"最省事的写法。
+  */
+  --chat-page-pad-x: clamp(14px, 2vw, 24px);
+  --chat-gap: 10px;
+  --chat-row-h: 60px;
+  --chat-fs-name: 13.5px;
+  --chat-fs-meta: 11.5px;
+  --chat-dur: 0.16s;            /* 交互动效统一时长：各写各的会有的快有的慢 */
+
+  /*
+    会话列表在宽窗口下的固定轨道宽度（双栏布局用，见 MessageLayout.vue）。
+    340px 是微信/Telegram 桌面版那一档：够放"头像 + 名字 + 一句摘要"，又不喧宾夺主。
+  */
+  --chat-rail: 340px;
+}
+
+/*
+  深色模式：同一套克制语言，只是把层级反过来（深底上靠"更亮一档的表面"分层）。
+  派生色同样按 EP 的暗色公式算：往背景色 #141414 混。
+*/
+html.dark {
+  --el-color-primary: #7c8cff;
+  --el-color-primary-light-3: #6a76cc;
+  --el-color-primary-light-5: #565fa3;
+  --el-color-primary-light-7: #424879;
+  --el-color-primary-light-8: #383d63;
+  --el-color-primary-light-9: #2e314e;
+  --el-color-primary-dark-2: #96a3ff;
+
+  --chat-page-bg: #0f1115;
+  --chat-surface: #16181d;
+  --chat-surface-2: #1f232b;
+  --chat-border: #232733;
+  --chat-border-strong: #2f3441;
+  --chat-text: #e8eaf0;
+  --chat-text-2: #a2a9b8;
+  --chat-text-3: #6f7684;
+  --chat-brand: #7c8cff;
+  --chat-brand-fg: #10121a;
+  --chat-danger: #ff6b6b;
+  --chat-shadow-2: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ══════════════════ 共享类 ══════════════════ */
+
+/*
+  页面外壳。所有 tab 页的最外层都用它 ——
+  padding 和"块与块之间的间距"只要有一页自己写，整站的对齐就散了。
+
+  ⚠️ 【桌面宽度：内容跟窗口等宽，不居中留白】
+  上一版我把内容收在 720px 的居中立柱里，两侧留深色空白 —— 那是"网页文章"的做法，
+  不是桌面应用的做法（用户看到的是"界面没铺满"）。这里的规则改成：
+
+    · 内容宽度 = 窗口宽度（不再有 max-width / margin auto）；
+    · 宽度靠内边距（padding）而不是靠限制列宽来"呼吸"；
+    · 内边距用 clamp() 随窗口缩放：窄窗口 14px、宽窗口最多 24px —— 这就是"自适应缩放"；
+    · 会话列表这种"一行的两端会被拉开到 1000px"的界面，靠【双栏布局】解决
+      （见 MessageLayout.vue），而不是靠收窄整页。
+*/
+.chat-page {
+  padding: var(--chat-page-pad) var(--chat-page-pad-x);
+  display: flex;
+  flex-direction: column;
+  gap: var(--chat-gap);
+  /* 内容永远不该横向溢出：一旦溢出，另一轴的 auto 会连带出水平滚动条
+     （CSS 规则：一轴非 visible 时，另一轴的 visible 会计算成 auto） */
+  overflow-x: hidden;
+}
+
+/* 页面大标题 */
+.chat-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--chat-text);
+}
+
+/* 单聊与群聊共用的更多菜单/资料抽屉，浮层同样跟随浅色及深色主题。 */
+.el-drawer.chat-details-drawer {
+  --el-drawer-bg-color: var(--chat-surface);
+  --el-bg-color: var(--chat-surface);
+  --el-fill-color-blank: var(--chat-surface);
+  --el-text-color-primary: var(--chat-text);
+  --el-text-color-regular: var(--chat-text-2);
+  --el-border-color: var(--chat-border);
+  background: var(--chat-surface);
+  color: var(--chat-text);
+}
+.chat-details-drawer .el-drawer__title { color: var(--chat-text); }
+.chat-details-drawer .el-drawer__close-btn { color: var(--chat-text-3); }
+.chat-details-drawer .el-avatar { color: var(--chat-brand); background: var(--chat-surface-2); }
+.el-popper.chat-more-menu { --el-bg-color-overlay: var(--chat-surface); border-color: var(--chat-border); }
+.chat-more-menu .el-dropdown-menu { background: var(--chat-surface); }
+.chat-more-menu .el-dropdown-menu__item { color: var(--chat-text-2); }
+.chat-more-menu .el-dropdown-menu__item:not(.is-disabled):hover,
+.chat-more-menu .el-dropdown-menu__item:focus { color: var(--chat-brand); background: var(--chat-surface-2); }
+
+/* 卡片/面板表面：发丝线 + 圆角，没有阴影（A 的核心规则） */
+.chat-card {
+  background: var(--chat-surface);
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius);
+}
+
+/* el-card 用它自己的变量画边框/圆角，这里对齐到同一套值 */
+.el-card.chat-card {
+  --el-card-border-color: var(--chat-border);
+  --el-card-border-radius: var(--chat-radius);
+  --el-card-padding: 14px;
+}
+
+/* 单行省略 */
+.chat-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 次要说明文字 */
+.chat-muted {
+  margin: 0;
+  font-size: var(--chat-fs-meta);
+  line-height: 1.6;
+  color: var(--chat-text-3);
+}
+
+/* 空状态里那句话：比正文重一档，但不做成标题那么大 */
+.empty-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--chat-text-2);
+}
+
+/* 空状态容器：细线图标 + 一句话，大量留白 */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 52px 24px;
+  text-align: center;
+  color: var(--chat-text-3);
+}
+
+.chat-empty .chat-empty-icon {
+  font-size: 34px;
+  line-height: 1;
+  /* 线条图标压一点透明度，才不会抢主体 */
+  opacity: 0.4;
+}
+
+/* ══════════════════ Element Plus 的全局对齐 ══════════════════ */
+
+/*
+  ① 头像统一成圆角方形。
+     这是 direction A 最省事也最见效的一条：一行覆盖全站所有 el-avatar，
+     不用去 8 个文件里各改一次。
+*/
+.el-avatar {
+  border-radius: var(--chat-radius-avatar);
+}
+
+/* ② 按钮：A 的字重是 500（400 在中文小字号下发虚），主按钮用主色 */
+.el-button {
+  font-weight: 500;
+}
+
+/* ③ 浮层（对话框/下拉/气泡提示）才给阴影 —— 它们确实浮在内容之上 */
+.el-dialog,
+.el-message-box,
+.el-popper {
+  box-shadow: var(--chat-shadow-2);
+}
+
+/*
+  ══════════════════ 全局提示（唯一一种样式） ══════════════════
+
+  全站所有提示 —— 后端的报错、连不上网、保存成功…… 全都走这一个外观：
+  **页面正中、红底白字、一句话**。
+  为什么统一：以前 error 是浅红条、success 是浅绿条、warning 是浅橙条，还都在屏幕顶部，
+  一个页面里能同时出现三种颜色和三个位置，读起来像三种不同的东西。
+  统一之后"出现一块红的 = 有事要你看一眼"，几乎不需要再读图标和颜色。
+
+  定位为什么用 top: calc(50% - 20px) 而不是 transform: translateY(-50%)：
+  Element Plus 的入场/退场动画本身就是用 transform 做的，覆盖掉会和动画打架；
+  只改 top 更稳（消息高度大约 40px，所以减 20px 就是垂直居中）。
+
+  ⚠️ 这段必须是【全局样式】：ElMessage 挂在 body 上，scoped 样式够不到它。
+*/
+.el-message.chat-toast {
+  top: calc(50% - 20px) !important;
+  min-width: 0;
+  max-width: min(72vw, 480px);
+  padding: 10px 16px;
+  /* 三个变量是 EP 自己用的，改它们比逐条覆盖更彻底 */
+  --el-message-bg-color: var(--chat-danger);
+  --el-message-border-color: var(--chat-danger);
+  --el-message-text-color: var(--el-color-white);
+  background-color: var(--chat-danger);
+  border-color: var(--chat-danger);
+  border-radius: var(--chat-radius);
+}
+
+/* 文字和图标都用白色；图标是次要信息，压一点透明度免得比文字还抢眼 */
+.el-message.chat-toast .el-message__content {
+  color: var(--el-color-white);
+  font-size: 13px;
+  line-height: 1.5;
+  /* 太长的提示最多两行 —— 提示的职责是"告诉你出事了"，不是写文档 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.el-message.chat-toast .el-message__icon {
+  color: var(--el-color-white);
+  opacity: 0.85;
+}
+
+/* ④ 滚动条做细、圆角、用中性灰 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--chat-border-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--chat-text-3);
+}

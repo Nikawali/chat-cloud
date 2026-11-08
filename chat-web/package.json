@@ -1,0 +1,57 @@
+{
+  "name": "chat-web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:only": "wait-on tcp:5173 && electron .",
+    "electron:dev:1": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron . --profile=1\"",
+    "electron:only:2": "wait-on tcp:5173 && electron . --profile=2",
+    "electron:pack": "vite build && electron-builder --dir",
+    "electron:build": "vite build && electron-builder"
+  },
+  "allowScripts": {
+    "electron": true,
+    "esbuild": true
+  },
+  "dependencies": {
+    "element-plus": "^2.9.1",
+    "jsencrypt": "^3.5.4",
+    "vue": "^3.5.13",
+    "vue-router": "^4.6.4",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "concurrently": "^10.0.5",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "vite": "^6.0.5",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.example.chat",
+    "productName": "Chat",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: 8084
+
+spring:
+  application:
+    name: chat-relation
+  cloud:
+    # ---- Nacos 服务发现（和别的服务同一套写法）----
+    nacos:
+      discovery:
+        # 跨服务器部署时改成 Nacos 的真实内网地址，如 192.168.1.10:8848
+        server-addr: localhost:8848
+      config:
+        enabled: false
+
+    openfeign:
+      client:
+        config:
+          # default 表示对所有 Feign 客户端生效
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+  # ---- MySQL 数据源 ----
+  # 用【项目专属】的变量名 CHAT_MYSQL_*，不要用 MYSQL_USER / MYSQL_PASSWORD ——
+  # 那两个名字太通用，容易和机器上别的项目留下的环境变量撞名，
+  # 撞上就会出现"配置文件明明改了却不生效"的诡异现象（我们就踩过这个坑）。
+  #
+  # 库名现在先用共享的 chat 库（和 chat-user 同一个库）。
+  # 将来如果要按服务拆库，这里改成 chat_relation 并单独建库即可，本服务的 SQL 不用动。
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${CHAT_MYSQL_USER:root}
+    # ⚠️ 生产环境不要把真实密码写在配置文件里，应该放环境变量或配置中心
+    password: ${CHAT_MYSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+# ---- MyBatis-Plus ----
+mybatis-plus:
+  configuration:
+    # 数据库的下划线字段自动映射成 Java 驼峰属性：from_user_id -> fromUserId
+    map-underscore-to-camel-case: true
+    # 把执行的 SQL 打印到控制台，学习阶段非常有用，生产环境记得关掉
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键策略：数据库自增
+      id-type: auto

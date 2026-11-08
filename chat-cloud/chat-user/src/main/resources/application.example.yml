@@ -1,0 +1,90 @@
+# Configuration example: copy to application.yml for local use.
+# Credentials must be supplied through environment variables.
+server:
+  port: 8082
+
+spring:
+  application:
+    name: chat-user
+  cloud:
+    # ---- Nacos 服务发现 ----
+    nacos:
+      discovery:
+        # 跨服务器部署时改成 Nacos 的真实内网地址，如 192.168.1.10:8848
+        server-addr: localhost:8848
+      config:
+        enabled: false
+
+  # ---- MySQL 数据源 ----
+  # 用【项目专属】的变量名 CHAT_MYSQL_*，不要用 MYSQL_USER / MYSQL_PASSWORD ——
+  # 那两个名字太通用，容易和机器上别的项目留下的环境变量撞名，
+  # 撞上就会出现"配置文件明明改了却不生效"的诡异现象（我们就踩过这个坑）。
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${CHAT_MYSQL_USER:root}
+    # ⚠️ 生产环境不要把真实密码写在配置文件里，应该放环境变量或配置中心
+    password: ${CHAT_MYSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # ---- 文件上传（头像）----
+  # Spring 的 multipart 限额是【请求级】的硬闸：超过它请求根本进不到 controller，
+  # 抛 MaxUploadSizeExceededException（全局异常处理器把它翻译成 400 + 一句人话）。
+  #
+  # 为什么这里给 5MB、而业务上限只有 2MB（见下面的 chat.upload.max-avatar-bytes）：
+  # 这一层只负责挡住"明显是攻击/误传"的超大请求；真正的业务上限要按用途定
+  # （头像 2MB 足够，聊天图片以后可能要 10MB）—— 两个数分开，改一个不影响另一个。
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+  # ---- Redis：用户资料缓存 ----
+  # 注意 Boot 3+ 的前缀是 spring.data.redis（不是旧版的 spring.redis）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3s
+
+# ---- 用户资料缓存 ----
+chat:
+  user-cache:
+    # 读缓存命中后，如果剩余 TTL 少于这个分钟数，就把过期时间续回 2 小时。
+    #
+    # 为什么不"每次命中都续"：Redis 的写比读贵（走主库、要复制、要落 AOF），
+    # 每次命中都续 = 把每次读变成一次写。用阈值可以让效果几乎一样、写次数降到几十分之一。
+    #
+    # 注意：这里【不包括】缓存本身的 TTL（那是 chat-common 的常量
+    # CacheKeys.USER_INFO_TTL，因为 chat-auth 写缓存时也要用同一个值）。
+    # 这个阈值只有 chat-user 用（只有它续期），所以放本服务的配置就够了。
+    refresh-threshold-minutes: ${CHAT_USER_CACHE_REFRESH_THRESHOLD_MINUTES:30}
+
+  # ---- 文件上传（头像 / 以后的聊天图片）----
+  #
+  # ⚠️ 这一块必须并进上面这个 chat: 里，不能再写一个顶层 chat: ——
+  #    YAML 里重复的顶层键是【后者覆盖前者】，那样 user-cache 的配置会被整块丢掉，
+  #    而且不报任何错（现象是"改了配置不生效"，最难查的那一类）。
+  upload:
+    # 上传根目录。相对路径是相对【服务的启动目录】——
+    # 也就是说：IDE 里跑 和 打包后跑，落盘位置不一样。
+    # 生产环境一定要配成绝对路径（或挂一个数据盘），否则重新部署会把用户头像弄丢。
+    dir: ${CHAT_UPLOAD_DIR:data/uploads}
+    # 单张头像的业务上限（2MB）。头像显示尺寸就那么点大，2MB 已经绰绰有余；
+    # 真正挡住超大请求的是上面 spring.servlet.multipart 那一层（5MB）
+    max-avatar-bytes: 2097152
+
+# ---- MyBatis-Plus ----
+mybatis-plus:
+  configuration:
+    # 数据库的下划线字段自动映射成 Java 驼峰属性：user_name -> userName
+    map-underscore-to-camel-case: true
+    # 把执行的 SQL 打印到控制台，学习阶段非常有用，生产环境记得关掉
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键策略：数据库自增
+      id-type: auto
